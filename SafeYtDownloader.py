@@ -7,7 +7,6 @@ Description: A professional YouTube Video & Playlist Downloader using yt-dlp wit
 
 import os
 import subprocess
-import shutil
 import sys
 import re
 import threading
@@ -17,22 +16,20 @@ class SafeYtDownloader:
     """Handles video and playlist downloads with progress tracking and optional debug mode."""
 
     def __init__(self):
-        self.save_path = os.path.expanduser("~/Documents/Music")
+        self.default_path = os.path.expanduser("~/Documents/Music")
+        self.save_path = self.default_path
         self.total_videos = 1
         self.completed_videos = 0
         self.progress_queue = queue.Queue()
         self.video_url = ""
         self.debug = False
         self.mode = self.get_user_choice()
-        self.ensure_save_directory()
 
     def log(self, message):
-        """Prints debug messages if debug mode is enabled."""
         if self.debug:
             print(f"[DEBUG] {message}")
 
     def get_user_choice(self):
-        """Asks the user to choose between single video, playlist, exit, or debug mode."""
         while True:
             choice = input("Select mode: (1) Single Video (2) Playlist (3) Exit (4) Enable Debugging: ").strip()
             if choice in ["1", "2", "4"]:
@@ -46,12 +43,27 @@ class SafeYtDownloader:
             print("[ERROR] Invalid input. Please enter 1, 2, 3, or 4.")
 
     def ensure_save_directory(self):
-        """Ensures the save directory exists."""
         os.makedirs(self.save_path, exist_ok=True)
         self.log(f"Save path: {self.save_path}")
 
+    def get_desktop_path(self):
+        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+        return desktop if os.path.isdir(desktop) else None
+
+    def ask_output_path(self):
+        desktop_path = self.get_desktop_path()
+        print("\nSelect output path:")
+        print(f"(1) Default → {self.default_path}")
+        if desktop_path:
+            print(f"(2) Desktop → {desktop_path}")
+        choice = input("Choice (1 or 2): ").strip()
+        if choice == "2" and desktop_path:
+            self.save_path = desktop_path
+        else:
+            self.save_path = self.default_path
+        self.ensure_save_directory()
+
     def get_playlist_length(self):
-        """Retrieves the number of videos in a playlist."""
         self.log("Fetching playlist length...")
         info_command = [
             "yt-dlp", "--flat-playlist", "--print", "%(id)s", self.video_url
@@ -66,7 +78,6 @@ class SafeYtDownloader:
             sys.exit(1)
 
     def update_progress_bar(self):
-        """Displays a dynamic progress bar."""
         bar_length = 50
         while self.completed_videos < self.total_videos:
             self.completed_videos = self.progress_queue.get()
@@ -79,11 +90,12 @@ class SafeYtDownloader:
         sys.stdout.flush()
 
     def start_download(self):
-        """Starts the download process."""
         self.video_url = input("Enter YouTube URL: ").strip()
         if not self.video_url:
             print("[ERROR] No URL provided.")
             sys.exit(1)
+
+        self.ask_output_path()
 
         if self.mode == "2":
             self.total_videos = self.get_playlist_length()
@@ -93,7 +105,6 @@ class SafeYtDownloader:
         self.download()
 
     def download(self):
-        """Runs yt-dlp to download the video or playlist."""
         command = [
             "yt-dlp", "--format", "bestaudio/best",
             "--extract-audio", "--audio-format", "mp3",
@@ -111,13 +122,11 @@ class SafeYtDownloader:
             for line in process.stdout:
                 if self.debug:
                     self.log(f"yt-dlp output: {line.strip()}")
-
                 if re.search(r"\[download\] Destination: .+", line):
                     self.completed_videos += 1
                     self.progress_queue.put(self.completed_videos)
 
             process.wait()
-
             if process.returncode != 0:
                 print("[ERROR] Download process failed.")
                 sys.exit(1)
