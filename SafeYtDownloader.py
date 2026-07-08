@@ -187,9 +187,7 @@ class SafeYtDownloader:
             "yt-dlp",
             "--ignore-errors",
             "--no-abort-on-error",
-            "--format", "bestaudio",
-            "--extract-audio", "--audio-format", "mp3",
-            "--audio-quality", "0",
+            "--format", "bestvideo+bestaudio/best",
             "--output", str(Path(self.save_path) / "%(title)s.%(ext)s"),
             self.video_url
         ]
