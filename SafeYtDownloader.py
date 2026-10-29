@@ -36,7 +36,7 @@ class SafeYtDownloader:
 
     def get_video_title(self):
         self.log("Fetching video title...")
-        command = ["yt-dlp", "--print", "%(title)s", self.video_url]
+        command = [sys.executable, "-m", "yt_dlp", "--print", "%(title)s", self.video_url]
 
         try:
             result = subprocess.run(command, capture_output=True, text=True, check=True)
@@ -50,7 +50,7 @@ class SafeYtDownloader:
 
     def get_playlist_title(self):
         self.log("Fetching playlist title...")
-        command = ["yt-dlp", "--flat-playlist", "--print", "%(playlist_title)s", self.video_url]
+        command = [sys.executable, "-m", "yt_dlp", "--flat-playlist", "--print", "%(playlist_title)s", self.video_url]
 
         try:
             result = subprocess.run(command, capture_output=True, text=True, check=True)
@@ -187,7 +187,9 @@ class SafeYtDownloader:
             "yt-dlp",
             "--ignore-errors",
             "--no-abort-on-error",
-            "--format", "bestvideo+bestaudio/best",
+            "--extract-audio",
+            "--audio-format", "mp3",
+            "--audio-quality", "0",
             "--output", str(Path(self.save_path) / "%(title)s.%(ext)s"),
             self.video_url
         ]
@@ -198,31 +200,40 @@ class SafeYtDownloader:
         self.log(f"Executing command: {' '.join(command)}")
 
         try:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            for line in process.stdout:
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
 
+            for line in process.stdout:
                 line = line.strip()
-                if "Downloading item" in line:
-                    print(f"[INFO] {line}")
-                if "ERROR:" in line:
-                    print(f"[YT-DLP ERROR] {line}")
-                if "WARNING:" in line:
-                    print(f"[YT-DLP WARNING] {line}")
 
                 if self.debug:
-                    self.log(f"yt-dlp output: {line}")
-                if "[ExtractAudio]" in line:
+                    print(line)
+
+                if "[ExtractAudio] Destination:" in line:
                     self.completed_videos += 1
                     self.progress_queue.put(self.completed_videos)
+
+                if "ERROR:" in line:
+                    print(f"\n[YT-DLP ERROR] {line}")
+
+                if "WARNING:" in line:
+                    print(f"\n[YT-DLP WARNING] {line}")
 
             process.wait()
 
             if process.returncode != 0:
-                print("\n[WARNING] Some playlist items failed. Check messages above.")
+                print("\n[ERROR] Download or conversion failed.")
+                sys.exit(process.returncode)
             else:
                 print(f"\n[INFO] Download completed! MP3 files saved in: {self.save_path}")
+
         except Exception as e:
-            print(f"[ERROR] Unexpected error: {e}")
+            print(f"\n[ERROR] Unexpected error: {e}")
             sys.exit(1)
 
 if __name__ == "__main__":
